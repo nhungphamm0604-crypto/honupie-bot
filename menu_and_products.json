@@ -1,0 +1,78 @@
+{
+  "brand_info": {
+    "name": "Honu Pie - Ăn Vặt Chuẩn Vibe",
+    "slogan": "Ăn vặt chuẩn Vibe - Nhai rôm rốp, cày cuốc thâu đêm!",
+    "location": "Hải Phòng",
+    "channels": {
+      "shopee": "https://shopee.vn/honupie",
+      "fanpage": "Honu Pie - Ăn Vặt Chuẩn Vibe",
+      "hotline": "Hỗ trợ sỉ & hỏa tốc Hải Phòng"
+    },
+    "voice_tone": "Năng động, cuốn hút, chuẩn vibe giới trẻ & game thủ (xưng 'Honu Pie' hoặc 'Shop em' - gọi khách là 'bồ / bác / anh em'). Nhiệt tình, nhanh gọn.",
+    "unique_selling_points": [
+      "Ship hỏa tốc Hải Phòng - Thèm là có liền",
+      "Nguồn hàng chuẩn vị, đóng gói sạch đẹp, date mới toanh",
+      "Đầy đủ giấy tờ VSATTP & hỗ trợ xuất hóa đơn VAT cho đối tác",
+      "Chuyên sỉ/lẻ giá tốt nhất cho Cyber Game, Quán Billiards, Coffee Shop, Bar, Pub"
+    ]
+  },
+  "customer_segments": {
+    "B2C_Retail": "Học sinh, sinh viên, dân văn phòng ăn xế, cày phim, lai rai nhậu tại nhà.",
+    "B2B_Wholesale": "Chủ phòng Net/Cyber Game, Quán Bida, Quán Cafe, Bar, Pub cần nguồn đồ ăn vặt đóng gói sẵn chất lượng cao, chiết khấu tốt."
+  },
+  "products": [
+    {
+      "id": "HN01",
+      "name": "Hạt Dưa Rang Bơ Thiên Lan (Gói/Lon)",
+      "category": "Hạt nhâm nhi",
+      "price": 38000,
+      "unit": "Gói 200g / 500g",
+      "description": "Hạt mẩy tròn, vỏ giòn dễ cắn, bùi béo ngậy thơm lừng mùi bơ, cắn rôm rốp cả ngày không chán.",
+      "best_seller": true,
+      "b2b_wholesale_available": true
+    },
+    {
+      "id": "HN02",
+      "name": "Khô Gà Lá Chanh Giòn Cay Vừa",
+      "category": "Món khô",
+      "price": 60000,
+      "unit": "Hũ 200g",
+      "description": "Thịt gà tươi xé sợi dai ngọt, ớt cay the the kết hợp lá chanh thơm nức mũi, chuẩn mồi nhắm & cày game.",
+      "best_seller": true,
+      "b2b_wholesale_available": true
+    },
+    {
+      "id": "HN03",
+      "name": "Khô Bò Sợi / Khô Heo Cháy Tỏi Thượng Hạng",
+      "category": "Món khô cao cấp",
+      "price": 75000,
+      "unit": "Hũ 200g",
+      "description": "Từng thớ thịt ngấm gia vị đậm đà, tỏi phi giòn rụm thơm lừng, vắt chút chanh là chuẩn bài.",
+      "best_seller": true,
+      "b2b_wholesale_available": true
+    },
+    {
+      "id": "HN04",
+      "name": "Snack Hot Trend & Bỏng Ngô Mỹ Giòn Tan",
+      "category": "Snack",
+      "price": 25000,
+      "unit": "Gói lớn",
+      "description": "Snack khoai tây, snack cay, bỏng ngô caramel ngọt thơm ngất ngây, vừa cày rank vừa nhai đã tai.",
+      "best_seller": false,
+      "b2b_wholesale_available": true
+    }
+  ],
+  "combos_and_upsell": [
+    {
+      "id": "CB_GAME",
+      "name": "Combo Leo Rank Thâu Đêm (1 Hạt Dưa + 1 Khô Gà + 1 Snack)",
+      "price": 115000,
+      "pitch": "Bác đang cày game hay xem phim thì quất ngay 'Combo Leo Rank' này nha, đủ vị mặn ngọt cay giòn, đang có giá ưu đãi tiết kiệm 15k luôn!"
+    },
+    {
+      "id": "CB_B2B",
+      "name": "Set Sỉ Quán Bida / Net / Cafe (Thùng Mix 50-100 gói)",
+      "pitch": "Bên em có chính sách chiết khấu cực tốt cho quán Net, Bida, Cafe kèm hóa đơn VAT và giao hỏa tốc Hải Phòng trong 1-2h!"
+    }
+  ]
+}
