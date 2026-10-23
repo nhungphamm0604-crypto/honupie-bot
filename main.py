@@ -20,6 +20,29 @@ GRAPH_API_URL = "https://graph.facebook.com/v19.0/me/messages"
 def home():
     return {"status": "ok", "message": "Honu Pie AI Agent Server is Running 24/7!"}
 
+# Endpoint kích hoạt đăng ký Fanpage với Webhook 1-Click
+@app.get("/subscribe")
+async def subscribe_page():
+    if not PAGE_ACCESS_TOKEN:
+        return {"error": "Chưa có FB_PAGE_ACCESS_TOKEN"}
+    
+    url = "https://graph.facebook.com/v19.0/me/subscribed_apps"
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+    payload = {
+        "subscribed_fields": ["messages", "messaging_postbacks"]
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.post(url, params=params, json=payload, timeout=10.0)
+            return {
+                "status_code": res.status_code,
+                "facebook_response": res.json(),
+                "message": "Nếu success = true nghĩa là Fanpage đã kết nối nhận tin nhắn 100%!"
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
 # 1. Xác thực Webhook với Facebook
 @app.get("/webhook")
 def verify_webhook(
@@ -35,6 +58,7 @@ def verify_webhook(
 @app.post("/webhook")
 async def handle_webhook(request: Request):
     data = await request.json()
+    print(f"[LOG] Nhan event tu Facebook: {data}")
     
     if data.get("object") == "page":
         for entry in data.get("entry", []):
@@ -46,6 +70,7 @@ async def handle_webhook(request: Request):
                     continue
                 
                 user_text = message.get("text").strip()
+                print(f"[LOG] Khach {sender_id} nhan: {user_text}")
                 
                 # Bật trạng thái "Đang gõ..."
                 await send_sender_action(sender_id, "typing_on")
@@ -59,7 +84,6 @@ async def handle_webhook(request: Request):
                 if img_match:
                     image_url = img_match.group(1).strip()
                 
-                # Làm sạch nội dung tin nhắn gửi cho khách
                 clean_reply = re.sub(r"\[IMAGE:[^\]]+\]", "", raw_ai_reply)
                 
                 # Kiểm tra thông báo đơn hàng
@@ -69,10 +93,11 @@ async def handle_webhook(request: Request):
                 else:
                     clean_reply = clean_reply.strip()
                 
-                # 1. Gửi tin nhắn văn bản trước
+                # 1. Gửi tin nhắn văn bản
+                print(f"[LOG] Bot tra loi: {clean_reply}")
                 await send_facebook_message(sender_id, clean_reply)
                 
-                # 2. Tự động gửi ảnh sản phẩm cho khách (nếu có ảnh)
+                # 2. Tự động gửi ảnh nếu có
                 if image_url:
                     await send_facebook_image(sender_id, image_url)
                 
@@ -92,12 +117,15 @@ async def send_facebook_message(recipient_id: str, text: str):
     params = {"access_token": PAGE_ACCESS_TOKEN}
     async with httpx.AsyncClient() as client:
         try:
-            await client.post(GRAPH_API_URL, params=params, json=payload, timeout=10.0)
+            res = await client.post(GRAPH_API_URL, params=params, json=payload, timeout=10.0)
+            if res.status_code != 200:
+                print(f"[ERROR] Gui tin nhan that bai: {res.text}")
+            else:
+                print(f"[SUCCESS] Da gui tin nhan thanh cong toi {recipient_id}")
         except Exception as e:
-            print(f"[ERROR] Gửi tin nhắn thất bại: {e}")
+            print(f"[ERROR] Exception sending FB message: {e}")
 
 async def send_facebook_image(recipient_id: str, image_url: str):
-    """Gửi trực tiếp hình ảnh sản phẩm vào hộp thư Messenger của khách"""
     if not PAGE_ACCESS_TOKEN or not image_url:
         return
     payload = {
@@ -105,10 +133,7 @@ async def send_facebook_image(recipient_id: str, image_url: str):
         "message": {
             "attachment": {
                 "type": "image",
-                "payload": {
-                    "url": image_url,
-                    "is_reusable": True
-                }
+                "payload": {"url": image_url, "is_reusable": True}
             }
         }
     }
@@ -117,7 +142,7 @@ async def send_facebook_image(recipient_id: str, image_url: str):
         try:
             await client.post(GRAPH_API_URL, params=params, json=payload, timeout=10.0)
         except Exception as e:
-            print(f"[ERROR] Gửi ảnh thất bại: {e}")
+            print(f"[ERROR] Gui anh that bai: {e}")
 
 async def send_sender_action(recipient_id: str, action: str):
     if not PAGE_ACCESS_TOKEN:
@@ -147,4 +172,4 @@ async def notify_owner_new_order(customer_id: str, customer_msg: str, bot_summar
         try:
             await client.post(tg_url, json=payload, timeout=5.0)
         except Exception as e:
-            print(f"[ERROR] Báo Telegram lỗi: {e}")
+            print(f"[ERROR] Bao Telegram loi: {e}")
