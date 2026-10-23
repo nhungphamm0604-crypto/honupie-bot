@@ -20,7 +20,7 @@ GRAPH_API_URL = "https://graph.facebook.com/v19.0/me/messages"
 def home():
     return {"status": "ok", "message": "Honu Pie AI Agent Server is Running 24/7!"}
 
-# 1. Xác thực Webhook với Facebook Meta
+# 1. Xác thực Webhook với Facebook
 @app.get("/webhook")
 def verify_webhook(
     hub_mode: str = Query(None, alias="hub.mode"),
@@ -31,7 +31,7 @@ def verify_webhook(
         return Response(content=hub_challenge, media_type="text/plain", status_code=status.HTTP_200_OK)
     return Response(content="Verification token mismatch", status_code=status.HTTP_403_FORBIDDEN)
 
-# 2. Nhận tin nhắn từ khách gửi vào Fanpage
+# 2. Xử lý tin nhắn khách gửi vào
 @app.post("/webhook")
 async def handle_webhook(request: Request):
     data = await request.json()
@@ -42,27 +42,40 @@ async def handle_webhook(request: Request):
                 sender_id = messaging_event.get("sender", {}).get("id")
                 message = messaging_event.get("message", {})
                 
-                # Bỏ qua tin nhắn do chính Fanpage gửi đi hoặc tin không có văn bản
                 if not sender_id or message.get("is_echo") or not message.get("text"):
                     continue
                 
                 user_text = message.get("text").strip()
                 
-                # Bật trạng thái "Đang gõ..." trên Messenger để khách thấy tự nhiên
+                # Bật trạng thái "Đang gõ..."
                 await send_sender_action(sender_id, "typing_on")
                 
-                # Gọi Bộ não AI Gemini để suy nghĩ câu trả lời & tự động Upsell
-                ai_reply = generate_ai_reply(sender_id, user_text)
+                # AI suy nghĩ câu trả lời
+                raw_ai_reply = generate_ai_reply(sender_id, user_text)
                 
-                # Kiểm tra nếu phát hiện đơn hàng hoặc khách để lại số điện thoại
-                if "[ORDER_DETECTED]" in ai_reply or re.search(r"(\+84|0)\d{9,10}", user_text):
-                    clean_reply = ai_reply.replace("[ORDER_DETECTED]", "").strip()
+                # Tách link ảnh nếu có tag [IMAGE:url]
+                image_url = None
+                img_match = re.search(r"\[IMAGE:(https?://[^\]]+)\]", raw_ai_reply)
+                if img_match:
+                    image_url = img_match.group(1).strip()
+                
+                # Làm sạch nội dung tin nhắn gửi cho khách
+                clean_reply = re.sub(r"\[IMAGE:[^\]]+\]", "", raw_ai_reply)
+                
+                # Kiểm tra thông báo đơn hàng
+                if "[ORDER_DETECTED]" in clean_reply or re.search(r"(\+84|0)\d{9,10}", user_text):
+                    clean_reply = clean_reply.replace("[ORDER_DETECTED]", "").strip()
                     await notify_owner_new_order(sender_id, user_text, clean_reply)
                 else:
-                    clean_reply = ai_reply
+                    clean_reply = clean_reply.strip()
                 
-                # Gửi câu trả lời về lại Messenger của khách
+                # 1. Gửi tin nhắn văn bản trước
                 await send_facebook_message(sender_id, clean_reply)
+                
+                # 2. Tự động gửi ảnh sản phẩm cho khách (nếu có ảnh)
+                if image_url:
+                    await send_facebook_image(sender_id, image_url)
+                
                 await send_sender_action(sender_id, "typing_off")
                 
         return Response(content="EVENT_RECEIVED", status_code=status.HTTP_200_OK)
@@ -70,23 +83,41 @@ async def handle_webhook(request: Request):
     return Response(content="Not Found", status_code=status.HTTP_404_NOT_FOUND)
 
 async def send_facebook_message(recipient_id: str, text: str):
-    if not PAGE_ACCESS_TOKEN:
-        print("[WARNING] Chưa điền FB_PAGE_ACCESS_TOKEN")
+    if not PAGE_ACCESS_TOKEN or not text:
         return
-        
     payload = {
         "recipient": {"id": recipient_id},
         "message": {"text": text}
     }
     params = {"access_token": PAGE_ACCESS_TOKEN}
-    
     async with httpx.AsyncClient() as client:
         try:
-            res = await client.post(GRAPH_API_URL, params=params, json=payload, timeout=10.0)
-            if res.status_code != 200:
-                print(f"[ERROR] Gửi tin nhắn thất bại: {res.text}")
+            await client.post(GRAPH_API_URL, params=params, json=payload, timeout=10.0)
         except Exception as e:
-            print(f"[ERROR] Exception sending FB message: {e}")
+            print(f"[ERROR] Gửi tin nhắn thất bại: {e}")
+
+async def send_facebook_image(recipient_id: str, image_url: str):
+    """Gửi trực tiếp hình ảnh sản phẩm vào hộp thư Messenger của khách"""
+    if not PAGE_ACCESS_TOKEN or not image_url:
+        return
+    payload = {
+        "recipient": {"id": recipient_id},
+        "message": {
+            "attachment": {
+                "type": "image",
+                "payload": {
+                    "url": image_url,
+                    "is_reusable": True
+                }
+            }
+        }
+    }
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(GRAPH_API_URL, params=params, json=payload, timeout=10.0)
+        except Exception as e:
+            print(f"[ERROR] Gửi ảnh thất bại: {e}")
 
 async def send_sender_action(recipient_id: str, action: str):
     if not PAGE_ACCESS_TOKEN:
@@ -103,25 +134,17 @@ async def send_sender_action(recipient_id: str, action: str):
             pass
 
 async def notify_owner_new_order(customer_id: str, customer_msg: str, bot_summary: str):
-    """Báo đơn hàng mới tức thì về điện thoại qua Telegram Bot"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
-    
     alert_text = (
-        f"🚨 <b>HONU PIE CÓ ĐƠN / KHÁCH TIỀM NĂNG MỚI!</b>\n\n"
+        f"🚨 <b>HONU PIE CÓ ĐƠN / KHÁCH MỚI!</b>\n\n"
         f"👤 <b>Khách nhắn:</b> {customer_msg}\n"
-        f"🤖 <b>AI đã tư vấn:</b> {bot_summary}\n\n"
-        f"👉 <i>Kiểm tra hộp thư Fanpage để đóng hàng hoặc chốt đơn ngay!</i>"
+        f"🤖 <b>AI đã tư vấn:</b> {bot_summary}\n"
     )
-    
     tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": alert_text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": alert_text, "parse_mode": "HTML"}
     async with httpx.AsyncClient() as client:
         try:
             await client.post(tg_url, json=payload, timeout=5.0)
         except Exception as e:
-            print(f"[ERROR] Không thể gửi thông báo Telegram: {e}")
+            print(f"[ERROR] Báo Telegram lỗi: {e}")
