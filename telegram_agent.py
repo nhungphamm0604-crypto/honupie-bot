@@ -33,7 +33,7 @@ async def run_batch_shopee_production(clean_sender: str, bot_token: str, product
     await send_telegram_message(
         bot_token, clean_sender,
         f"🚀 <b>BẮT ĐẦU DỰ ÁN: TRỌN BỘ 6 ẢNH SHOPEE CHO [{product_name.upper()}]</b>\n\n"
-        f"📌 <b>Chế độ:</b> Tự hành 100% cả ngày.\n"
+        f"📌 <b>Chế độ:</b> Tự hành 100% cả ngày qua cổng OpenAI DALL-E 3 & FLUX Studio.\n"
         f"🔍 <b>Mắt thần QC:</b> Soi kỹ 7 tiêu chuẩn (Bao bì bay 3D, viền sắc nét, Mascot Panda, khoảng an toàn Logo, chính tả...).\n\n"
         f"⏳ Sếp cứ yên tâm làm việc khác, mỗi khi hoàn thành và nghiệm thu xong 1 ảnh đạt chuẩn, em sẽ báo cáo ngay cho Sếp!"
     )
@@ -49,7 +49,7 @@ async def run_batch_shopee_production(clean_sender: str, bot_token: str, product
             continue
             
         img_url = img_res["url"]
-        provider = img_res.get("provider", "FLUX HD Studio")
+        provider = img_res.get("provider", "OpenAI DALL-E 3 (GPT)")
         
         # 2. Mắt thần AI kiểm định chất lượng (QC)
         qc_report = await verify_honupie_qc(product_name, slide_idx, img_url)
@@ -86,7 +86,7 @@ async def run_batch_multi_products(clean_sender: str, bot_token: str, product_li
         img_res = await generate_image_gpt(f"Ảnh bìa Shopee {prod}", slide_index=1)
         if img_res.get("success"):
             img_url = img_res["url"]
-            provider = img_res.get("provider", "FLUX HD Studio")
+            provider = img_res.get("provider", "OpenAI DALL-E 3 (GPT)")
             qc_report = await verify_honupie_qc(prod, 1, img_url)
             checklist_str = "\n".join([f"  ✅ {c['item']}" for c in qc_report["checklist"]])
             
@@ -116,6 +116,7 @@ async def process_telegram_command(sender_id: str, command_text: str, bot_token:
     print(f"[PROCESS COMMAND] from={clean_sender}, cmd='{command_text}'")
 
     gemini_key = os.getenv("GEMINI_API_KEY", "")
+    openai_key = os.getenv("OPENAI_API_KEY", "")
     page_token = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
 
     cmd_lower = command_text.strip().lower()
@@ -142,14 +143,24 @@ async def process_telegram_command(sender_id: str, command_text: str, bot_token:
         await send_telegram_message(bot_token, clean_sender, welcome_text)
         return
 
-    # TRƯỜNG HỢP GIAO VIỆC LÀM TRỌN BỘ 6 ẢNH SHOPEE CHO 1 MÓN
-    if any(k in cmd_lower for k in ["cả bộ", "trọn bộ", "6 ảnh", "full bộ", "bộ ảnh shopee"]):
+    # TRƯỜNG HỢP GIAO VIỆC LÀM TRỌN BỘ ẢNH SHOPEE
+    if any(k in cmd_lower for k in ["từng bộ", "bộ sản phẩm", "cả bộ", "trọn bộ", "6 ảnh", "full bộ", "bộ ảnh", "mỗi sản phẩm"]):
         prod_name = command_text
-        for kw in ["làm cả bộ ảnh shopee cho", "làm trọn bộ 6 ảnh cho", "làm cả bộ ảnh", "làm trọn bộ ảnh", "tạo cả bộ ảnh", "làm cả bộ", "trọn bộ 6 ảnh", "cho"]:
+        for kw in ["tạo từng bộ sản phẩm cho mỗi sản phẩm này", "tạo từng bộ sản phẩm cho", "làm cả bộ ảnh shopee cho", "làm trọn bộ 6 ảnh cho", "làm cả bộ ảnh", "làm trọn bộ ảnh", "tạo cả bộ ảnh", "làm cả bộ", "trọn bộ 6 ảnh", "cho"]:
             if kw in prod_name.lower():
                 prod_name = re.split(kw, prod_name, flags=re.IGNORECASE)[-1].strip()
-        if not prod_name or len(prod_name) < 2:
-            prod_name = "Snack Honu Pie"
+        
+        # Nếu sếp nhắn chung chung chưa có tên món:
+        if not prod_name or len(prod_name) < 2 or prod_name.lower() in ["này", "sản phẩm này", "mỗi sản phẩm này"]:
+            menu_prods = [p["name"] for p in HONU_DATA.get("products", [])]
+            msg = (
+                f"🫡 <b>DẠ SẾP! EM ĐÃ SẴN SÀNG TẠO BỘ ẢNH SHOPEE CHO TỪNG SẢN PHẨM!</b>\n\n"
+                f"Hiện tại trong Menu của Honu Pie có các món sẵn sàng:\n" +
+                "\n".join([f"  {i+1}. {name}" for i, name in enumerate(menu_prods[:5])]) +
+                f"\n\n👉 Sếp muốn em làm trọn bộ 6 ảnh cho món nào trước? (Ví dụ sếp nhắn: <i>'Làm trọn bộ cho Oishi Tater'</i> hoặc gửi danh sách là em cày ngầm ngay ạ!)"
+            )
+            await send_telegram_message(bot_token, clean_sender, msg)
+            return
             
         asyncio.create_task(run_batch_shopee_production(clean_sender, bot_token, prod_name))
         return
@@ -177,7 +188,7 @@ async def process_telegram_command(sender_id: str, command_text: str, bot_token:
         img_result = await generate_image_gpt(command_text)
         if img_result.get("success"):
             img_url = img_result["url"]
-            provider = img_result.get("provider", "FLUX HD Studio")
+            provider = img_result.get("provider", "OpenAI DALL-E 3 (GPT)")
             slide_type = img_result.get("slide_type", "Ảnh chuẩn Shopee")
             slide_id = img_result.get("slide_id", 1)
             
@@ -211,12 +222,8 @@ async def process_telegram_command(sender_id: str, command_text: str, bot_token:
         await send_telegram_message(bot_token, clean_sender, report)
         return
 
-    # TRƯỜNG HỢP VIẾT BÀI & ĐĂNG BÀI LÊN FACEBOOK FANPAGE
-    try:
-        genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=f"""
+    # TRƯỜNG HỢP VIẾT BÀI / CHAT THÔNG MINH QUA OPENAI GPT
+    system_instruction = f"""
 Bạn là Trợ lý Vận hành & Marketing cấp cao của tiệm đồ ăn vặt "Honu Pie - Ăn Vặt Chuẩn Vibe" tại Hải Phòng.
 Sếp vừa ra lệnh: "{command_text}".
 DỮ LIỆU MÓN ĂN:
@@ -227,12 +234,33 @@ Nếu Sếp bảo đăng bài / viết bài:
 - Chèn mã [POST_FB] ở đầu.
 - Chèn mã [IMAGE_PROMPT: mô tả ngắn món ăn bằng tiếng Anh] để hệ thống tự động gọi GPT tạo ảnh kèm theo bài viết!
 """
-        )
+    reply_content = ""
+    if openai_key:
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": command_text}
+                        ],
+                        "temperature": 0.7
+                    },
+                    timeout=30.0
+                )
+                if res.status_code == 200:
+                    reply_content = res.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            print(f"[OpenAI Chat Error] {e}")
 
-        response = model.generate_content(command_text)
-        reply_content = response.text.strip()
-    except Exception as e:
-        reply_content = f"Dạ Sếp! Em đã nhận lệnh '{command_text}', nhưng cổng AI đang báo lỗi: {e}. Sếp kiểm tra lại biến GEMINI_API_KEY trên Render nhé ạ!"
+    if not reply_content:
+        reply_content = (
+            f"🫡 <b>Dạ Sếp! Em đã nhận lệnh:</b> <i>'{command_text}'</i>\n\n"
+            f"Sếp muốn em tạo ảnh cho món nào trước trong Menu của Honu Pie? (Ví dụ: <i>Oishi Tater phô mai, Hạt dưa Thiên Lan, Khô gà...</i>) sếp nhắn tên món để em bắt đầu sản xuất ngay nhé!"
+        )
 
     if "[POST_FB]" in reply_content:
         clean_post = reply_content.replace("[POST_FB]", "").strip()
