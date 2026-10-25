@@ -117,11 +117,55 @@ HƯỚNG DẪN BẮT Ý ĐỊNH:
     except Exception as e:
         print(f"[GPT Fallback Error] {e}")
 
-    # Fallback dự phòng nếu mạng chập chờn
+    # BỘ PHÂN TÍCH THÔNG MINH DỰ PHÒNG (NẾU OPENAI CHƯA CÓ CREDIT HOẶC MẠNG NGHẼN)
+    cmd_lower = command_text.lower().strip()
+    
+    # 1. Sếp hỏi về thời gian thực hiện (bao lâu, mấy phút, khi nào xong...)
+    if any(q in cmd_lower for q in ["bao lâu", "mất bao lâu", "mấy phút", "mấy tiếng", "khi nào xong", "bao giờ xong"]):
+        return {
+            "action": "chat",
+            "reply_to_ceo": (
+                "⏱️ <b>Dạ Sếp! Thời gian sản xuất được tính chuẩn như sau ạ:</b>\n\n"
+                "• <b>1 ảnh lẻ:</b> Mất khoảng <b>10 - 15 giây</b> (tạo ảnh + kiểm định QC).\n"
+                "• <b>1 bộ 6 ảnh Shopee:</b> Mất khoảng <b>1.5 - 2 phút</b> cho trọn bộ (vừa tạo vừa soi viền, logo, mascot).\n"
+                "• <b>Toàn bộ Menu (7 món):</b> Mất khoảng <b>10 - 12 phút</b> chạy ngầm cả ngày.\n\n"
+                "Cứ xong và nghiệm thu đạt chuẩn ảnh nào là em ting ting gửi ngay vào Telegram này cho Sếp duyệt ảnh đó ạ!"
+            )
+        }
+
+    # 2. Sếp hỏi thăm, thắc mắc, hỏi lỗi
+    if any(q in cmd_lower for q in ["sao thế", "sao lâu", "được không", "thế nào", "là gì", "ở đâu"]):
+        return {
+            "action": "chat",
+            "reply_to_ceo": (
+                "🫡 <b>Dạ Sếp! Em đang trực chiến 24/7 đây ạ!</b>\n\n"
+                "Mọi hệ thống đã sẵn sàng. Sếp muốn em tạo bộ ảnh cho món nào hay cần soạn mô tả Shopee, sếp cứ chỉ đạo là em cày ngay ạ!"
+            )
+        }
+
+    # 3. Sếp bảo tạo các bộ ảnh / tất cả các món
+    if any(k in cmd_lower for k in ["tạo các bộ", "từng bộ", "mỗi sản phẩm", "toàn bộ", "hết các món", "tất cả", "đã gửi"]):
+        all_prods = [p["name"] for p in HONU_DATA.get("products", [])]
+        return {
+            "action": "batch_all_products",
+            "products": all_prods,
+            "reply_to_ceo": f"🫡 Dạ Sếp! Em bắt đầu chạy ngầm sản xuất trọn bộ ảnh Shopee cho toàn bộ {len(all_prods)} sản phẩm trong Menu ngay đây ạ!"
+        }
+
+    # 4. Sếp nhắc tên món cụ thể
+    for p in HONU_DATA.get("products", []):
+        p_name = p["name"].lower()
+        if any(term in cmd_lower for term in [p_name, "tater", "oishi", "bò bbq", "hạt dưa", "bắp", "kettle", "vfoods", "pillows", "khô gà", "khô bò"]):
+            return {
+                "action": "batch_single_product",
+                "products": [p["name"]],
+                "reply_to_ceo": f"🚀 Dạ Sếp! Em bắt đầu sản xuất trọn bộ 6 ảnh Shopee cho món [{p['name'].upper()}] ngay ạ!"
+            }
+
+    # Mặc định phản hồi tôn trọng Sếp
     return {
-        "action": "single_image",
-        "products": ["Snack Honu Pie"],
-        "reply_to_ceo": f"Dạ Sếp! Em đã nhận lệnh '{command_text}' và đang kết nối hệ thống triển khai ngay cho Sếp!"
+        "action": "chat",
+        "reply_to_ceo": f"🫡 Dạ Sếp! Em đã nhận chỉ đạo: <i>'{command_text}'</i>. Sếp muốn em tạo ảnh cho món nào hay soạn bài đăng Shopee, sếp bảo em làm liền nhé!"
     }
 
 # ==============================================================================
