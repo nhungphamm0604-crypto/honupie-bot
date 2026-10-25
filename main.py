@@ -25,6 +25,34 @@ def home():
 # 1. HỆ THỐNG TELEGRAM CHỈ HUY TỪ XA (CHO SẾP)
 # ==========================================
 
+recent_logs = []
+
+# Kiểm tra trực tiếp xem Bot có gửi được tin nhắn về Telegram cho Sếp không
+@app.get("/test-telegram")
+async def test_telegram(msg: str = "🫡 Chào Sếp Hoàng! Đây là tin nhắn kiểm tra trực tiếp từ máy chủ Honu Pie!"):
+    admin_id = os.getenv("TELEGRAM_ADMIN_ID", "1454811705").strip()
+    if not TELEGRAM_BOT_TOKEN:
+        return {"error": "Chưa có TELEGRAM_BOT_TOKEN"}
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": admin_id, "text": msg}
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.post(url, json=payload, timeout=10.0)
+            return {
+                "status_code": res.status_code,
+                "telegram_api_response": res.json(),
+                "target_chat_id": admin_id,
+                "note": "Nếu ok=true nghĩa là bot đã gửi tin nhắn vào máy sếp thành công!"
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+# Xem nhật ký tin nhắn gửi tới máy chủ trong thời gian thực
+@app.get("/view-logs")
+def view_logs():
+    return {"total_logs": len(recent_logs), "logs": recent_logs[-20:]}
+
 # Cài đặt Webhook Telegram tự động 1-Click
 @app.get("/setup-telegram")
 async def setup_telegram():
@@ -48,16 +76,26 @@ async def setup_telegram():
 # Tiếp nhận tin nhắn chỉ đạo của Sếp từ Telegram
 @app.post("/telegram-webhook")
 async def handle_telegram_webhook(request: Request):
-    data = await request.json()
-    message = data.get("message", {})
-    sender_id = str(message.get("from", {}).get("id", ""))
-    command_text = message.get("text", "").strip()
+    try:
+        data = await request.json()
+        message = data.get("message") or data.get("edited_message") or {}
+        chat = message.get("chat", {})
+        sender_id = str(chat.get("id") or message.get("from", {}).get("id", "")).strip()
+        command_text = message.get("text", "").strip()
 
-    if sender_id and command_text:
-        # Xử lý mệnh lệnh của Sếp (Viết bài, đăng Facebook, báo cáo...)
-        reply_report = await process_telegram_command(sender_id, command_text, TELEGRAM_BOT_TOKEN)
-        # Gửi báo cáo lại ngay vào Telegram của Sếp
-        await send_telegram_message(TELEGRAM_BOT_TOKEN, sender_id, reply_report)
+        recent_logs.append({
+            "sender_id": sender_id,
+            "text": command_text,
+            "from_user": message.get("from", {}).get("username", "")
+        })
+
+        if sender_id and command_text:
+            await process_telegram_command(sender_id, command_text, TELEGRAM_BOT_TOKEN)
+        elif sender_id and not command_text:
+            await send_telegram_message(TELEGRAM_BOT_TOKEN, sender_id, "Dạ Sếp, em đã nhận được tín hiệu nhưng chưa thấy nội dung. Sếp gửi mệnh lệnh cho em nhé!")
+    except Exception as e:
+        recent_logs.append({"error": str(e)})
+        print(f"[ERROR Telegram Webhook] {e}")
 
     return {"status": "ok"}
 

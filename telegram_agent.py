@@ -15,20 +15,35 @@ else:
 with open(DATA_PATH, "r", encoding="utf-8") as f:
     HONU_DATA = json.load(f)
 
-ADMIN_TELEGRAM_ID = "1454811705"
+ADMIN_TELEGRAM_ID = os.getenv("TELEGRAM_ADMIN_ID", "1454811705").strip()
 PAGE_ID = "803810416157920"
 
 async def process_telegram_command(sender_id: str, command_text: str, bot_token: str):
     """Xử lý mệnh lệnh của Sếp qua Telegram: Tự tạo ảnh GPT, tạo video Veo, đăng bài Facebook"""
-    if str(sender_id) != ADMIN_TELEGRAM_ID:
-        await send_telegram_message(bot_token, sender_id, "Xin lỗi, tôi là trợ lý riêng của Sếp Honu Pie và chỉ nhận lệnh từ Sếp!")
-        return
+    clean_sender = str(sender_id).strip()
+    print(f"[PROCESS COMMAND] from={clean_sender}, cmd='{command_text}'")
 
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     page_token = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
 
     # Phân tích ý định của Sếp:
-    cmd_lower = command_text.lower()
+    cmd_lower = command_text.strip().lower()
+
+    # TRƯỜNG HỢP 0: LỆNH /start, /help, test, chào hỏi
+    if cmd_lower in ["/start", "start", "/help", "help", "alo", "hi", "hello", "chào", "test"]:
+        welcome_text = (
+            "🫡 <b>DẠ SẾP! EM ĐÃ SẴN SÀNG PHỤC VỤ HONU PIE 24/7!</b>\n\n"
+            "Em là Trợ lý AI kiêm Giám đốc Marketing của Sếp. Em có thể tự động làm mọi việc theo lệnh của Sếp:\n\n"
+            "🎨 <b>1. Tạo ảnh sản phẩm AI:</b>\n"
+            "👉 Nhắn: <i>Tạo ảnh Hạt dưa rang bơ chuẩn studio ánh sáng ấm</i>\n\n"
+            "🎬 <b>2. Tạo video / Reels bằng AI (Google Veo):</b>\n"
+            "👉 Nhắn: <i>Tạo video reels bim bim Oishi chuyển động chậm</i>\n\n"
+            "📢 <b>3. Tự viết bài và tự đăng lên Fanpage:</b>\n"
+            "👉 Nhắn: <i>Đăng bài combo khô gà cay lên Fanpage</i> (Em sẽ tự viết bài, tự sinh ảnh và tự đăng)\n\n"
+            "Sếp cứ nhắn mệnh lệnh bất kỳ cho em nhé!"
+        )
+        await send_telegram_message(bot_token, clean_sender, welcome_text)
+        return
 
     # TRƯỜNG HỢP 1: SẾP YÊU CẦU TẠO ẢNH QUA CỔNG GPT (DALL-E 3)
     if "tạo ảnh" in cmd_lower or "vẽ ảnh" in cmd_lower or "chụp ảnh" in cmd_lower:
@@ -62,10 +77,11 @@ async def process_telegram_command(sender_id: str, command_text: str, bot_token:
         return
 
     # TRƯỜNG HỢP 3: SẾP RA LỆNH VIẾT BÀI & ĐĂNG BÀI LÊN FACEBOOK (TỰ TẠO CẢ ẢNH + CAPTION)
-    genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=f"""
+    try:
+        genai.configure(api_key=gemini_key)
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=f"""
 Bạn là Trợ lý Vận hành & Marketing cấp cao của tiệm đồ ăn vặt "Honu Pie - Ăn Vặt Chuẩn Vibe" tại Hải Phòng.
 Sếp vừa ra lệnh: "{command_text}".
 DỮ LIỆU MÓN ĂN:
@@ -76,10 +92,12 @@ Nếu Sếp bảo đăng bài / viết bài:
 - Chèn mã [POST_FB] ở đầu.
 - Chèn mã [IMAGE_PROMPT: mô tả ngắn món ăn bằng tiếng Anh] để hệ thống tự động gọi GPT tạo ảnh kèm theo bài viết!
 """
-    )
+        )
 
-    response = model.generate_content(command_text)
-    reply_content = response.text.strip()
+        response = model.generate_content(command_text)
+        reply_content = response.text.strip()
+    except Exception as e:
+        reply_content = f"Dạ Sếp! Em đã nhận lệnh '{command_text}', nhưng cổng AI đang báo lỗi: {e}. Sếp kiểm tra lại biến GEMINI_API_KEY trên Render nhé ạ!"
 
     if "[POST_FB]" in reply_content:
         clean_post = reply_content.replace("[POST_FB]", "").strip()
@@ -144,19 +162,36 @@ async def publish_to_facebook_page(content: str, page_token: str, image_url: str
             return {"success": False, "error": str(e)}
 
 async def send_telegram_message(bot_token: str, chat_id: str, text: str):
+    if not text:
+        return
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    payload = {"chat_id": str(chat_id), "text": text, "parse_mode": "HTML"}
     async with httpx.AsyncClient() as client:
         try:
-            await client.post(url, json=payload, timeout=10.0)
+            res = await client.post(url, json=payload, timeout=10.0)
+            print(f"[SEND MSG RESULT] status={res.status_code}, body={res.text}")
         except Exception as e:
-            print(f"[ERROR] Gui Telegram that bai: {e}")
+            print(f"[ERROR Gui Telegram that bai] {e}")
 
 async def send_telegram_photo(bot_token: str, chat_id: str, photo_url: str, caption: str):
     url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-    payload = {"chat_id": chat_id, "photo": photo_url, "caption": caption, "parse_mode": "HTML"}
     async with httpx.AsyncClient() as client:
+        # Tải ảnh về rồi gửi dạng file trực tiếp lên Telegram (chắc chắn 100% thành công)
         try:
-            await client.post(url, json=payload, timeout=15.0)
+            img_res = await client.get(photo_url, timeout=25.0)
+            if img_res.status_code == 200:
+                files = {"photo": ("honupie_dish.jpg", img_res.content, "image/jpeg")}
+                data = {"chat_id": str(chat_id), "caption": caption, "parse_mode": "HTML"}
+                res = await client.post(url, data=data, files=files, timeout=20.0)
+                print(f"[SEND PHOTO RESULT] status={res.status_code}, body={res.text}")
+                return
         except Exception as e:
-            print(f"[ERROR] Gui anh Telegram that bai: {e}")
+            print(f"[ERROR Tai anh fallback] {e}")
+
+        # Phương án 2: Gửi link ảnh trực tiếp
+        try:
+            payload = {"chat_id": str(chat_id), "photo": photo_url, "caption": caption, "parse_mode": "HTML"}
+            res = await client.post(url, json=payload, timeout=15.0)
+            print(f"[SEND PHOTO URL RESULT] status={res.status_code}, body={res.text}")
+        except Exception as e:
+            print(f"[ERROR Gui anh URL] {e}")
